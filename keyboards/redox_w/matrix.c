@@ -17,6 +17,7 @@
 #include "quantum.h"
 #include "matrix.h"
 #include "uart.h"
+#include "quantum/action.h"
 
 #define UART_MATRIX_RESPONSE_TIMEOUT 10000
 
@@ -31,11 +32,12 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     //the s character requests the RF slave to send the matrix
     uart_write('s');
 
-    //trust the external keystates entirely, erase the last data
-    uint8_t uart_data[11] = {0};
 
-    //there are 10 bytes corresponding to 10 columns, and then an end byte
-    for (uint8_t i = 0; i < 11; i++) {
+    //trust the external keystates entirely, erase the last data
+    uint8_t uart_data[PACKET_LEN] = {0};
+
+    //there are 14 bytes corresponding to 14 columns, and an end byte
+    for (uint8_t i = 0; i < PACKET_LEN; i++) {
         //wait for the serial data, timeout if it's been too long
         //this only happened in testing with a loose wire, but does no
         //harm to leave it in here
@@ -55,7 +57,8 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
 
     //check for the end packet, the key state bytes use the LSBs, so 0xE0
     //will only show up here if the correct bytes were recieved
-    if (uart_data[10] == 0xE0) {
+    if (uart_data[PACKET_LEN - 1] == 0xE0)
+    {
         //shifting and transferring the keystates to the QMK matrix variable
         for (uint8_t i = 0; i < MATRIX_ROWS; i++) {
             matrix_row_t current_row = (uint16_t) uart_data[i * 2] | (uint16_t) uart_data[i * 2 + 1] << 7;
@@ -63,6 +66,36 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
                 changed = true;
             }
             current_matrix[i] = current_row;
+        }
+        for (size_t i = 0; i < 2; ++i)
+        {
+            const uint8_t new_value = uart_data[2 * MATRIX_ROWS + i];
+            if (new_value != encoder_values[i])
+            {
+                const uint8_t old_value = encoder_values[i];
+
+                encoder_values[i] = new_value;
+                dprintf("encL: %d encR: %d", encoder_values[0], encoder_values[1]);
+
+                const uint16_t diff = (uint16_t)new_value - (uint16_t)old_value;
+                print("\n");
+                if (diff <= 256/2) {
+                    tap_code(KC_VOLU);
+                    print("+1");
+                } else {
+                    tap_code(KC_VOLD);
+                    print("-1");
+                }
+                print("\n");
+                // if (new_value < encoder_values[i])
+                // {
+                //     tap_code(KC_VOLD);
+                // }
+                // else
+                // {
+                //     tap_code(KC_VOLU);
+                // }
+            }
         }
     }
 
