@@ -75,16 +75,16 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
                 const uint8_t old_value = encoder_values[i];
 
                 encoder_values[i] = new_value;
-                dprintf("encL: %d encR: %d", encoder_values[0], encoder_values[1]);
+                dprintf("encL: %d encR: %d", encoder_values[0]%20, encoder_values[1]%20);
 
                 const uint16_t diff = (uint16_t)new_value - (uint16_t)old_value;
                 print("\n");
                 if (diff <= 256/2) {
-                    tap_code(KC_VOLU);
-                    print("+1");
+                    // tap_code(KC_VOLU);
+                    dprintf("+1 => %d", diff);
                 } else {
-                    tap_code(KC_VOLD);
-                    print("-1");
+                    // tap_code(KC_VOLD);
+                    dprintf("-1 => %d", diff);
                 }
                 print("\n");
                 // if (new_value < encoder_values[i])
