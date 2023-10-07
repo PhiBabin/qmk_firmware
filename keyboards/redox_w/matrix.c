@@ -21,6 +21,10 @@
 
 #define UART_MATRIX_RESPONSE_TIMEOUT 10000
 
+#define PAYLOAD_LEN 12
+#define PACKET_LEN (PAYLOAD_LEN + 1)
+
+
 void matrix_init_custom(void) {
     uart_init(1000000);
 }
@@ -28,6 +32,8 @@ void matrix_init_custom(void) {
 bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     uint32_t timeout = 0;
     bool changed = false;
+    static bool initialized = false;
+    static uint8_t encoder_values[2] = {0};
 
     //the s character requests the RF slave to send the matrix
     uart_write('s');
@@ -67,6 +73,14 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
             }
             current_matrix[i] = current_row;
         }
+
+        // Makes sure that the encoder values are initialized, before we start counting ticks
+        if (!initialized)
+        {
+            encoder_values[0] = uart_data[2 * MATRIX_ROWS];
+            encoder_values[1] = uart_data[2 * MATRIX_ROWS + 1];
+            initialized = true;
+        }
         for (size_t i = 0; i < 2; ++i)
         {
             const uint8_t new_value = uart_data[2 * MATRIX_ROWS + i];
@@ -75,18 +89,30 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
                 const uint8_t old_value = encoder_values[i];
 
                 encoder_values[i] = new_value;
-                dprintf("encL: %d encR: %d", encoder_values[0]%20, encoder_values[1]%20);
 
-                const uint16_t diff = (uint16_t)new_value - (uint16_t)old_value;
-                print("\n");
-                if (diff <= 256/2) {
+                const int8_t diff = (int8_t)(new_value - old_value);
+                if (debug_enable)
+                {
+                    dprintf("encL: %d encR: %d  diff: %d", encoder_values[0], encoder_values[1], diff);
+
+                    char dial[128];
+                    memset(dial, ' ', 128);
+                    dial[encoder_values[1] % 128] = '+';
+                    dprintf("|%s|", dial);
+                    dprint("\n");
+                }
+                if (diff > 100 || diff < -100)
+                {
+                    dprintf("Encoder change is too large (%d), ignoring it", diff);
+                }
+                else if (diff > 0) {
                     tap_code(KC_VOLU);
                     dprintf("+1 => %d", diff);
                 } else {
                     tap_code(KC_VOLD);
                     dprintf("-1 => %d", diff);
                 }
-                print("\n");
+                dprint("\n");
             }
         }
     }
